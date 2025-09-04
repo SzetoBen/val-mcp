@@ -1,15 +1,4 @@
 #!/usr/bin/env python3
-"""
-Valorant MCP Server using Henrik API
-Provides tools and resources for fetching Valorant player statistics and information.
-
-Run with:
-    python valorant.py
-    
-Or install in Claude Desktop:
-    uv run mcp install valorant.py -v VAL_API_KEY=your_key_here
-"""
-
 import os
 from dotenv import load_dotenv
 import aiohttp
