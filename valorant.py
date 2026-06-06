@@ -3,12 +3,16 @@ import os
 from dotenv import load_dotenv
 import aiohttp
 import asyncio
+import nest_asyncio
 from typing import Optional, Dict, Any, List
 from datetime import datetime
 from pydantic import BaseModel, Field
 
 from mcp.server.fastmcp import FastMCP, Context
 from mcp.server.session import ServerSession
+
+# Patch event loop to allow nested event loops in proxy environments
+nest_asyncio.apply()
 
 load_dotenv()
 
