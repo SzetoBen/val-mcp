@@ -204,7 +204,7 @@ async def fetch_match_history(name: str, tag: str, size: int = 5, mode: Optional
 async def get_player_account(
     name: str,
     tag: str,
-    ctx: Context[ServerSession, None]
+    ctx: Context
 ) -> AccountInfo:
     """Get basic account information for a Valorant player.
     
@@ -229,7 +229,7 @@ async def get_player_account(
 async def get_player_rank(
     name: str,
     tag: str,
-    ctx: Context[ServerSession, None]
+    ctx: Context
 ) -> MMRInfo:
     """Get current competitive rank information for a Valorant player.
     
@@ -259,7 +259,7 @@ async def get_player_rank(
 async def get_match_history(
     name: str,
     tag: str,
-    ctx: Context[ServerSession, None],
+    ctx: Context,
     match_count: int = 5,
     mode: Optional[str] = None
 ) -> List[MatchData]:
@@ -289,7 +289,7 @@ async def get_match_history(
 async def analyze_player_performance(
     name: str,
     tag: str,
-    ctx: Context[ServerSession, None],
+    ctx: Context,
     matches_to_analyze: int = 5
 ) -> PlayerAnalysis:
     """Analyze a player's recent performance across multiple matches.
