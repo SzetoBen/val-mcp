@@ -3,16 +3,11 @@ import os
 from dotenv import load_dotenv
 import aiohttp
 import asyncio
-import nest_asyncio
 from typing import Optional, Dict, Any, List
 from datetime import datetime
 from pydantic import BaseModel, Field
 
-from mcp.server.fastmcp import FastMCP, Context
-from mcp.server.session import ServerSession
-
-# Patch event loop to allow nested event loops in proxy environments
-nest_asyncio.apply()
+from fastmcp import FastMCP, Context
 
 load_dotenv()
 
@@ -464,34 +459,8 @@ async def cleanup():
         await _session.close()
 
 if __name__ == "__main__":
-    import atexit
-    import sys
-    
-    # Register cleanup
-    atexit.register(lambda: asyncio.run(cleanup()))
-    
-    # Check if the script is being executed by an external CLI runner (like fastmcp, mcp, or uvicorn)
-    is_cli_runner = any(any(runner in arg.lower() for runner in ["fastmcp", "mcp", "uvicorn"]) for arg in sys.argv)
-    
-    if is_cli_runner:
-        import logging
-        logging.basicConfig(level=logging.INFO)
-        logging.getLogger(__name__).info("CLI runner detected. Skipping explicit mcp.run() to let runner manage execution.")
+    port_env = os.getenv("PORT")
+    if port_env:
+        mcp.run(transport="sse", host="0.0.0.0", port=int(port_env))
     else:
-        # Check if we are already running inside an active asyncio event loop
-        try:
-            asyncio.get_running_loop()
-            import logging
-            logging.basicConfig(level=logging.INFO)
-            logging.getLogger(__name__).info("Active asyncio event loop detected. Skipping explicit mcp.run().")
-        except RuntimeError:
-            # Run the server over SSE transport if PORT env var is present (e.g., in Cloud Run)
-            # otherwise default to stdio
-            port_env = os.getenv("PORT")
-            if port_env:
-                import logging
-                logging.basicConfig(level=logging.INFO)
-                print(f"Starting MCP server on SSE transport on port {port_env}")
-                mcp.run(transport="sse", host="0.0.0.0", port=int(port_env))
-            else:
-                mcp.run()
+        mcp.run()
