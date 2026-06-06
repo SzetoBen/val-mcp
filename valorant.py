@@ -465,25 +465,33 @@ async def cleanup():
 
 if __name__ == "__main__":
     import atexit
+    import sys
     
     # Register cleanup
     atexit.register(lambda: asyncio.run(cleanup()))
     
-    # Check if we are already running inside an active asyncio event loop (e.g. via fastmcp run CLI)
-    try:
-        asyncio.get_running_loop()
-        # Active loop detected; skip blocking run and let the host runner execute the mcp object
+    # Check if the script is being executed by an external CLI runner (like fastmcp, mcp, or uvicorn)
+    is_cli_runner = any(any(runner in arg.lower() for runner in ["fastmcp", "mcp", "uvicorn"]) for arg in sys.argv)
+    
+    if is_cli_runner:
         import logging
         logging.basicConfig(level=logging.INFO)
-        logging.getLogger(__name__).info("Active asyncio event loop detected. Skipping explicit mcp.run() to let runner manage execution.")
-    except RuntimeError:
-        # Run the server over SSE transport if PORT env var is present (e.g., in Cloud Run)
-        # otherwise default to stdio
-        port_env = os.getenv("PORT")
-        if port_env:
+        logging.getLogger(__name__).info("CLI runner detected. Skipping explicit mcp.run() to let runner manage execution.")
+    else:
+        # Check if we are already running inside an active asyncio event loop
+        try:
+            asyncio.get_running_loop()
             import logging
             logging.basicConfig(level=logging.INFO)
-            print(f"Starting MCP server on SSE transport on port {port_env}")
-            mcp.run(transport="sse", host="0.0.0.0", port=int(port_env))
-        else:
-            mcp.run()
+            logging.getLogger(__name__).info("Active asyncio event loop detected. Skipping explicit mcp.run().")
+        except RuntimeError:
+            # Run the server over SSE transport if PORT env var is present (e.g., in Cloud Run)
+            # otherwise default to stdio
+            port_env = os.getenv("PORT")
+            if port_env:
+                import logging
+                logging.basicConfig(level=logging.INFO)
+                print(f"Starting MCP server on SSE transport on port {port_env}")
+                mcp.run(transport="sse", host="0.0.0.0", port=int(port_env))
+            else:
+                mcp.run()
