@@ -32,6 +32,8 @@ class AccountInfo(BaseModel):
     name: str = Field(description="Display name")
     tag: str = Field(description="Tag line")
     account_level: int = Field(description="Account level")
+    region: Optional[str] = Field(description="Riot region", default="na")
+
 
 class MMRInfo(BaseModel):
     """MMR/Rank information structure."""
@@ -102,12 +104,13 @@ async def fetch_account_info(name: str, tag: str) -> Optional[AccountInfo]:
         puuid=data.get("puuid", ""),
         name=data.get("name", ""),
         tag=data.get("tag", ""),
-        account_level=data.get("account_level", 0)
+        account_level=data.get("account_level", 0),
+        region=data.get("region", "na")
     )
 
-async def fetch_mmr_info(puuid: str) -> Optional[MMRInfo]:
+async def fetch_mmr_info(puuid: str, region: str = "na") -> Optional[MMRInfo]:
     """Fetch MMR information from Henrik API."""
-    res = await fetch_from_henrik(f"/valorant/v3/by-puuid/mmr/na/pc/{puuid}")
+    res = await fetch_from_henrik(f"/valorant/v3/by-puuid/mmr/{region}/pc/{puuid}")
     if not res or not res.get("data"):
         return None
     
@@ -129,7 +132,16 @@ async def fetch_mmr_info(puuid: str) -> Optional[MMRInfo]:
 
 async def fetch_match_history(name: str, tag: str, size: int = 5, mode: Optional[str] = None, start: int = 0) -> List[MatchData]:
     """Fetch match history from Henrik API."""
-    endpoint = f"/valorant/v3/matches/na/{name}/{tag}?size={size}"
+    # Resolve official account information to get correct region and casing
+    account = await fetch_account_info(name, tag)
+    if not account:
+        return []
+    
+    region = account.region or "na"
+    official_name = account.name
+    official_tag = account.tag
+
+    endpoint = f"/valorant/v3/matches/{region}/{official_name}/{official_tag}?size={size}"
     if mode:
         endpoint += f"&mode={mode}"
     if start > 0:
@@ -145,10 +157,10 @@ async def fetch_match_history(name: str, tag: str, size: int = 5, mode: Optional
         players_data = match.get("players", {})
         all_players = players_data.get("all_players", [])
         
-        # Find the player in all_players
+        # Find the player in all_players using case-insensitive name/tag comparison
         player = None
         for p in all_players:
-            if p.get("name") == name and p.get("tag") == tag:
+            if p.get("name", "").lower() == official_name.lower() and p.get("tag", "").lower() == official_tag.lower():
                 player = p
                 break
         
@@ -166,9 +178,7 @@ async def fetch_match_history(name: str, tag: str, size: int = 5, mode: Optional
             rounds_lost = match["teams"][team_color].get("rounds_lost")
         
         # Get mode
-        mode_val = None
-        if match.get("mode_id") in ["deathmatch", "competitive", "unrated", "spikerush"]:
-            mode_val = match["mode_id"]
+        mode_val = metadata.get("mode_id") or metadata.get("mode")
         
         # Get stats
         stats = player.get("stats", {})
@@ -236,14 +246,14 @@ async def get_player_rank(
         if not account_info:
             raise Exception("Player not found")
         
-        mmr_info = await fetch_mmr_info(account_info.puuid)
+        mmr_info = await fetch_mmr_info(account_info.puuid, account_info.region or "na")
         if not mmr_info:
             raise Exception("MMR info not available")
         
         await ctx.info(f"Player current tier: {mmr_info.current_tier}, peak tier: {mmr_info.peak_tier}")
         return mmr_info
     except Exception as e:
-        await ctx.error(f"Failed to fetch rank info: {str(e)}")
+        await ctx.error(f"Failed to `fetch` rank info: {str(e)}")
         raise
 
 @mcp.tool()
@@ -353,7 +363,7 @@ async def get_player_profile(name: str, tag: str) -> str:
         if not account_info:
             return f"Error: Player {name}#{tag} not found"
         
-        mmr_info = await fetch_mmr_info(account_info.puuid)
+        mmr_info = await fetch_mmr_info(account_info.puuid, account_info.region or "na")
         
         profile_text = f"""Player Profile: {name}#{tag}
 Account Level: {account_info.account_level}
@@ -455,5 +465,13 @@ if __name__ == "__main__":
     # Register cleanup
     atexit.register(lambda: asyncio.run(cleanup()))
     
-    # Run the server
-    mcp.run()
+    # Run the server over SSE transport if PORT env var is present (e.g., in Cloud Run)
+    # otherwise default to stdio
+    port_env = os.getenv("PORT")
+    if port_env:
+        import logging
+        logging.basicConfig(level=logging.INFO)
+        print(f"Starting MCP server on SSE transport on port {port_env}")
+        mcp.run(transport="sse", host="0.0.0.0", port=int(port_env))
+    else:
+        mcp.run()
