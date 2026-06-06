@@ -465,13 +465,21 @@ if __name__ == "__main__":
     # Register cleanup
     atexit.register(lambda: asyncio.run(cleanup()))
     
-    # Run the server over SSE transport if PORT env var is present (e.g., in Cloud Run)
-    # otherwise default to stdio
-    port_env = os.getenv("PORT")
-    if port_env:
+    # Check if we are already running inside an active asyncio event loop (e.g. via fastmcp run CLI)
+    try:
+        asyncio.get_running_loop()
+        # Active loop detected; skip blocking run and let the host runner execute the mcp object
         import logging
         logging.basicConfig(level=logging.INFO)
-        print(f"Starting MCP server on SSE transport on port {port_env}")
-        mcp.run(transport="sse", host="0.0.0.0", port=int(port_env))
-    else:
-        mcp.run()
+        logging.getLogger(__name__).info("Active asyncio event loop detected. Skipping explicit mcp.run() to let runner manage execution.")
+    except RuntimeError:
+        # Run the server over SSE transport if PORT env var is present (e.g., in Cloud Run)
+        # otherwise default to stdio
+        port_env = os.getenv("PORT")
+        if port_env:
+            import logging
+            logging.basicConfig(level=logging.INFO)
+            print(f"Starting MCP server on SSE transport on port {port_env}")
+            mcp.run(transport="sse", host="0.0.0.0", port=int(port_env))
+        else:
+            mcp.run()
